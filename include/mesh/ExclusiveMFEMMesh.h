@@ -40,6 +40,13 @@ class ExclusiveMFEMMesh : public FileMesh {
   // Builds placeholder mesh when no MOOSE mesh is required
   void buildDummyMesh();
 
+  void buildMFEMMesh();
+
   // The object holding our MFEM mesh. Needs renaming as to avoid confusion
-  MFEMMesh* mfem_mesh;
+  MFEMMesh* retrieveMFEMMesh();
+
+ protected:
+
+  MFEMMesh* mfem_mesh;  
+
 };

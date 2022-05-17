@@ -26,8 +26,16 @@ ExclusiveMFEMMesh::~ExclusiveMFEMMesh()
 { 
 }
 
+MFEMMesh ExclusiveMFEMMesh::retrieveMFEMMesh() {
+  return *mfem_mesh;
+}
+
 void ExclusiveMFEMMesh::buildMesh() { 
   buildDummyMesh();
+  buildMFEMMesh();
+}
+
+void ExclusiveMFEMMesh::buildMFEMMesh() {
   mfem_mesh = new MFEMMesh(getFileName());
 }
 
