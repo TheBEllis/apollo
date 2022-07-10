@@ -9,6 +9,8 @@
 
 #include "CoupledMFEMMesh.h"
 #include "libmesh/face_quad4.h"
+#include <chrono>
+#include <unistd.h>
 
 registerMooseObject("ApolloApp", CoupledMFEMMesh);
 
@@ -28,6 +30,7 @@ void CoupledMFEMMesh::buildMesh() {
   //Use method from file mesh to build MOOSE mesh from exodus file
   FileMesh::buildMesh();
   //Create MFEM Mesh
+  std::cout << "Checkpoint 1: MOOSE mesh created" << std::endl;
   createMFEMMesh();
 }
 
@@ -114,7 +117,8 @@ void CoupledMFEMMesh::getElementInfo() {
                                                    << " node 2D element\n");
       }
     }
-  } else if (_dim == 3) {
+  } 
+  else if (_dim == 3) {
     switch (num_node_per_el) {
       case (4): {
         libmesh_element_type = ELEMENT_TET4;
@@ -184,20 +188,6 @@ void CoupledMFEMMesh::getElementInfo() {
 void CoupledMFEMMesh::createMFEMMesh() {
   //These are all maps that enable us to get the vertices on one side of the mesh using the indexing system of [side number][node of that side]
   //This is used from line 438 onwards
-  
-  Elem* el = elemPtr(3);
-  // for(int i = 0; i < el->n_sides(); i++)
-  // {
-  //   std::cout << i << std::endl;
-  //   std::vector<unsigned int> nodes = el->nodes_on_side(i);
-  //   for(int j: nodes)
-  //   {
-  //     std::cout << j + 1 << " ";
-  //   }
-  //   std::cout << "\n";
-  // }
-  // std::cout << "\n\n";
-
   const int sideMapTri3[3][2] = {
       {1, 2},
       {2, 3},
@@ -235,25 +225,31 @@ void CoupledMFEMMesh::createMFEMMesh() {
                                  {1, 4, 8, 5}, {1, 4, 3, 2}, {5, 8, 7, 6}};
 
   const int sideMapHex27[6][9] = {
-      {1, 4, 3, 2, 12, 11, 10, 9, 22},{1, 2, 6, 5, 9, 14, 17, 13, 26},  
-      {2, 3, 7, 6, 10, 15, 18, 14, 25}, {4, 3, 7, 8, 11, 15, 19, 16, 27}, 
-      {1, 4, 8, 5, 12, 16, 20, 13, 24}, {5, 8, 7, 6, 20, 19, 18, 17, 23}};
+      {1, 2, 6, 5, 9, 14, 17, 13, 26},  {2, 3, 7, 6, 10, 15, 18, 14, 25},
+      {4, 3, 7, 8, 11, 15, 19, 16, 27}, {1, 4, 8, 5, 12, 16, 20, 13, 24},
+      {1, 4, 3, 2, 12, 11, 10, 9, 22},  {5, 8, 7, 6, 20, 19, 18, 17, 23}};
 
-  // const int sideMapHex27[6][9] = {
-  //     {1, 4, 3, 2, 12, 11, 10, 9, 21},{1, 2, 6, 5, 9, 14, 17, 13, 22},  
-  //     {2, 3, 7, 6, 10, 15, 18, 14, 23}, {4, 3, 7, 8, 11, 15, 19, 16, 24}, 
-  //     {1, 4, 8, 5, 12, 16, 20, 13, 25}, {5, 8, 7, 6, 20, 19, 18, 17, 26}};
+  const int mfemToGenesisTet10[10] = {1, 2, 3, 4, 5, 7, 8, 6, 9, 10};
+
+  //                                  1,2,3,4,5,6,7,8,9,10,11,
+  const int mfemToGenesisHex27[27] = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11,
+                                      // 12,13,14,15,16,17,18,19
+                                      12, 17, 18, 19, 20, 13, 14, 15,
+                                      // 20,21,22,23,24,25,26,27
+                                      16, 22, 26, 25, 27, 24, 23, 21};
+
+  const int mfemToGenesisTri6[6] = {1, 2, 3, 4, 5, 6};
+  const int mfemToGenesisQuad9[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   buildBndElemList();
   getElementInfo();
-  std::cout << "Checkpoint 1" << std::endl;
+  std::cout << "num face nodes = " << num_face_nodes << std::endl;
+
   num_side_sets = getNumSidesets();
   int** elem_ss = new int*[num_side_sets];
   int** side_ss = new int*[num_side_sets];
 
   getBdrLists(elem_ss, side_ss);
-
-
 
   std::set<subdomain_id_type> block_ids;
   getMesh().subdomain_ids(block_ids);
@@ -274,15 +270,16 @@ void CoupledMFEMMesh::createMFEMMesh() {
   }
   
   for (int block : block_ids) {
+    
     int num_el_in_block_counter = 1;
     for (libMesh::MeshBase::element_iterator el_ptr =
              getMesh().active_subdomain_elements_begin(block);
          el_ptr != getMesh().active_subdomain_elements_end(block); el_ptr++) {
       num_el_in_blk[block - 1] = num_el_in_block_counter++;
+      
     }
   }
 
-  std::cout << "Checkpoint 2" << std::endl;
   // elem_blk is a 2D array that stores all the nodes of all the elements in all
   // the blocks Indexing is done as so, elem_blk[block_id][node]
   
@@ -305,7 +302,7 @@ void CoupledMFEMMesh::createMFEMMesh() {
       elem_count++;
     }
   }
-  std::cout << "Checkpoint 3" << std::endl;
+  
   // start_of_block is a 1D array with (1 + the number of blocks) elements.
   // The first element value is always 0, the subsequent values are the starting element
   // of each block. Forexample if block 1 consists of elements 0,1,2 the
@@ -318,65 +315,107 @@ void CoupledMFEMMesh::createMFEMMesh() {
   for (int i = 1; i < (int)num_el_blk + 1; i++) {
     start_of_block[i] = start_of_block[i - 1] + num_el_in_blk[i - 1];
   }
-  int** ss_node_id = new int*[num_side_sets];
+  std::ofstream globalID("mooseGlobID");
 
+  // int** ss_node_id = new int*[num_side_sets];
+
+
+  // auto start = std::chrono::steady_clock::now();
+
+  // for (int i = 0; i < (int)num_side_sets; i++) {
+  //   ss_node_id[i] = new int[num_sides_in_ss[i] * num_face_nodes];
+  //   for (int j = 0; j < (int)num_sides_in_ss[i]; j++) {
+  //     int glob_ind = elem_ss[i][j];
+  //     globalID << glob_ind << std::endl;
+  //     int iblk = 0;
+  //     int loc_ind;
+  //     while (iblk < (int)num_el_blk && glob_ind >= start_of_block[iblk + 1]) {
+  //       iblk++;
+  //     }
+  //     loc_ind = glob_ind - start_of_block[iblk];
+  //     int this_side = side_ss[i][j];
+  //     int ielem = loc_ind * num_node_per_el;
+  //     for (int k = 0; k < num_face_nodes; k++) {
+  //       int inode;
+  //       switch (libmesh_element_type) {
+  //         case (ELEMENT_TRI3): {
+  //           inode = sideMapTri3[this_side][k];
+  //           break;
+  //         }
+  //         case (ELEMENT_TRI6): {
+  //           inode = sideMapTri6[this_side][k];
+  //           break;
+  //         }
+  //         case (ELEMENT_QUAD4): {
+  //           inode = sideMapQuad4[this_side][k];
+  //           break;
+  //         }
+  //         case (ELEMENT_QUAD9): {
+  //           inode = sideMapQuad9[this_side][k];
+  //           break;
+  //         }
+  //         case (ELEMENT_TET4): {
+  //           inode = sideMapTet4[this_side][k];
+  //           //std::cout << "first order" << std::endl;
+  //           break;
+  //         }
+  //         case (ELEMENT_TET10): {
+  //           inode = sideMapTet10[this_side][k];
+  //           break;
+  //         }
+  //         case (ELEMENT_HEX8): {
+  //           inode = sideMapHex8[this_side][k];
+  //           break;
+  //         }
+  //         case (ELEMENT_HEX27): {
+  //           inode = sideMapHex27[this_side][k];
+  //           break;
+  //         }
+  //       }
+  //       ss_node_id[i][j * num_face_nodes + k] =
+  //           1 + elem_blk[iblk][ielem + inode - 1];
+            
+  //     }
+  //   }
+  // }
+
+  // auto end = std::chrono::steady_clock::now();
+
+  // std::cout << "Old code time = "
+  //   << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()
+  //   << " µs" << std::endl;
+
+
+
+
+  // start = std::chrono::steady_clock::now();
+  int** ss_node_id_2 = new int*[num_side_sets];
   for (int i = 0; i < (int)num_side_sets; i++) {
-    ss_node_id[i] = new int[num_sides_in_ss[i] * num_face_nodes];
+    
+    ss_node_id_2[i] = new int[num_sides_in_ss[i] * num_face_nodes];
     for (int j = 0; j < (int)num_sides_in_ss[i]; j++) {
       int glob_ind = elem_ss[i][j];
-      int iblk = 0;
-      int loc_ind;
-      while (iblk < (int)num_el_blk && glob_ind >= start_of_block[iblk + 1]) {
-        iblk++;
+      int side = side_ss[i][j];
+      Elem* elem = elemPtr(glob_ind);
+      // std::cout << glob_ind << " " << side << std::endl;
+
+      std::vector<unsigned int> nodes = elem->nodes_on_side(side);
+      
+      for(int k = 0; k<num_face_nodes; k++)
+      {
+        ss_node_id_2[i][j * num_face_nodes + k] = elem->node_id(nodes[k]);
       }
-      loc_ind = glob_ind - start_of_block[iblk];
-      int this_side = side_ss[i][j];
-      int ielem = loc_ind * num_node_per_el;
-      for (int k = 0; k < num_face_nodes; k++) {
-        int inode;
-        switch (libmesh_element_type) {
-          case (ELEMENT_TRI3): {
-            inode = sideMapTri3[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_TRI6): {
-            inode = sideMapTri6[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_QUAD4): {
-            inode = sideMapQuad4[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_QUAD9): {
-            inode = sideMapQuad9[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_TET4): {
-            inode = sideMapTet4[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_TET10): {
-            inode = sideMapTet10[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_HEX8): {
-            inode = sideMapHex8[this_side - 1][k];
-            break;
-          }
-          case (ELEMENT_HEX27): {
-            inode = sideMapHex27[this_side - 1][k];
-            // std::cout << inode << " ";
-            break;
-          }
-        }
-        
-        ss_node_id[i][j * num_face_nodes + k] =
-            1 + elem_blk[iblk][ielem + inode - 1];
-            
-      }
-      // std::cout << "\n";
+      // std::cout << std::endl;
     }
-  }
+}  
+
+
+  // end = std::chrono::steady_clock::now();
+
+  // std::cout << "New code time = "
+  //     << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()
+  //     << " µs" << std::endl;
+
 
   std::vector<int> uniqueVertexID;
 
@@ -398,13 +437,10 @@ void CoupledMFEMMesh::createMFEMMesh() {
   // list, the inverse is a map
 
   std::map<int, int> cubitToMFEMVertMap;
-  
   for (int i = 0; i < (int)uniqueVertexID.size(); i++) {
-    cubitToMFEMVertMap[uniqueVertexID[i]] = i;
-    // std::cout << cubitToMFEMVertMap[uniqueVertexID[i]] << std::endl;
+    cubitToMFEMVertMap[uniqueVertexID[i]] = i + 1;
   }
 
-  std::cout << "Checkpoint 4" << std::endl;
   std::vector<double> coordx(nNodes(), 0);
   std::vector<double> coordy(nNodes(), 0);
   std::vector<double> coordz(nNodes(), 0);
@@ -413,43 +449,17 @@ void CoupledMFEMMesh::createMFEMMesh() {
     coordx[node_counter] = (**i)(0);
     coordy[node_counter] = (**i)(1);
     coordz[node_counter] = (**i)(2);
-
     node_counter++;
   }
-  std::cout << "Checkpoint 5" << std::endl;
+  
   int num_elem = nElem();
-
-  for(auto &key: cubitToMFEMVertMap)
-  {
-    // std::cout << key.first << "  " << key.second << std::endl;
-  }
-
-  for(int i = 0; i < num_side_sets; i++)
-  {
-    for(int j = 0; j < num_sides_in_ss[i]; j++)
-    {
-        std::cout << elem_ss[i][j] << " " << side_ss[i][j];
-        std::cout << "\n";
-    }
-  }
-
-
-
-
   mfem_mesh = new MFEMMesh(num_elem, coordx, coordy, coordz, cubitToMFEMVertMap, uniqueVertexID,
       libmesh_element_type, libmesh_face_type, elem_blk, num_el_blk,
       num_node_per_el, num_el_in_blk, num_element_linear_nodes, num_face_nodes,
-      num_face_linear_nodes, num_side_sets, num_sides_in_ss, ss_node_id, ebprop,
+      num_face_linear_nodes, num_side_sets, num_sides_in_ss, ss_node_id_2, ebprop,
       ssprop, 3, start_of_block);
-  
-
-  std::cout << "Checkpoint 6" << std::endl;
-  for (int i = 0; i < (int)num_side_sets; i++) {
-    delete[] elem_ss[i];
-    delete[] side_ss[i];
-  }
-
 
   delete[] elem_ss;
   delete[] side_ss;
+  delete[] ss_node_id_2;
 }

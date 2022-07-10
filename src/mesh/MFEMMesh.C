@@ -22,7 +22,7 @@ MFEMMesh::MFEMMesh(
                                       // 12,13,14,15,16,17,18,19
                                       12, 17, 18, 19, 20, 13, 14, 15,
                                       // 20,21,22,23,24,25,26,27
-                                      16, 22, 26, 25, 27, 24, 23, 21};
+                                      16, 21, 22, 23, 24, 25, 26, 27};
 
   const int mfemToGenesisTri6[6] = {1, 2, 3, 4, 5, 6};
   const int mfemToGenesisQuad9[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
@@ -115,7 +115,7 @@ MFEMMesh::MFEMMesh(
     for (int i = 0; i < (int)num_side_in_ss[iss]; i++) {
       for (int j = 0; j < num_face_linear_nodes; j++) {
         renumberedVertID[j] =
-            cubitToMFEMVertMap[ss_node_id[iss][i * num_face_nodes + j]];
+            cubitToMFEMVertMap[1 + ss_node_id[iss][i * num_face_nodes + j]];
       }
       switch (libmesh_face_type) {
         case (FACE_EDGE2):
@@ -187,7 +187,6 @@ MFEMMesh::MFEMMesh(
       }
       std::cout << "Finalising Topology" << std::endl;
       FinalizeTopology();
-      std::cout << "Checkpoint 9" << std::endl;
       // Define quadratic FE space
       mfem::FiniteElementCollection *fec = new mfem::H1_FECollection(2,3);
       mfem::FiniteElementSpace *fes = new mfem::FiniteElementSpace(this, fec, Dim,
@@ -216,7 +215,8 @@ MFEMMesh::MFEMMesh(
         loc_ind = i - start_of_block[iblk];
         for (int j = 0; j < dofs.Size(); j++)
         {
-          int point_id = elem_blk[iblk][loc_ind*num_node_per_el + mymap[j] - 1] - 1;
+          int point_id = elem_blk[iblk][loc_ind*num_node_per_el + mymap[j] - 1];
+          std::cout << point_id << std::endl;
           (*Nodes)(vdofs[j]) = coordx[point_id];
           (*Nodes)(vdofs[j]+1) = coordy[point_id];
           if (Dim == 3)
@@ -229,7 +229,7 @@ MFEMMesh::MFEMMesh(
    }
 
   std::cout << "Checkpoint 8" << std::endl;
-  std::ofstream mesh_ofs("helpmeee.VTK");
+  std::ofstream mesh_ofs("hello.vtk");
   mesh_ofs.precision(8);
   this->PrintVTK(mesh_ofs);
   std::cout << "Checkpoint 8" << std::endl;
