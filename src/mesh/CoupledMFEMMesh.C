@@ -243,7 +243,6 @@ void CoupledMFEMMesh::createMFEMMesh() {
 
   buildBndElemList();
   getElementInfo();
-  std::cout << "num face nodes = " << num_face_nodes << std::endl;
 
   num_side_sets = getNumSidesets();
   int** elem_ss = new int*[num_side_sets];
@@ -317,82 +316,11 @@ void CoupledMFEMMesh::createMFEMMesh() {
   }
   std::ofstream globalID("mooseGlobID");
 
-  // int** ss_node_id = new int*[num_side_sets];
-
-
-  // auto start = std::chrono::steady_clock::now();
-
-  // for (int i = 0; i < (int)num_side_sets; i++) {
-  //   ss_node_id[i] = new int[num_sides_in_ss[i] * num_face_nodes];
-  //   for (int j = 0; j < (int)num_sides_in_ss[i]; j++) {
-  //     int glob_ind = elem_ss[i][j];
-  //     globalID << glob_ind << std::endl;
-  //     int iblk = 0;
-  //     int loc_ind;
-  //     while (iblk < (int)num_el_blk && glob_ind >= start_of_block[iblk + 1]) {
-  //       iblk++;
-  //     }
-  //     loc_ind = glob_ind - start_of_block[iblk];
-  //     int this_side = side_ss[i][j];
-  //     int ielem = loc_ind * num_node_per_el;
-  //     for (int k = 0; k < num_face_nodes; k++) {
-  //       int inode;
-  //       switch (libmesh_element_type) {
-  //         case (ELEMENT_TRI3): {
-  //           inode = sideMapTri3[this_side][k];
-  //           break;
-  //         }
-  //         case (ELEMENT_TRI6): {
-  //           inode = sideMapTri6[this_side][k];
-  //           break;
-  //         }
-  //         case (ELEMENT_QUAD4): {
-  //           inode = sideMapQuad4[this_side][k];
-  //           break;
-  //         }
-  //         case (ELEMENT_QUAD9): {
-  //           inode = sideMapQuad9[this_side][k];
-  //           break;
-  //         }
-  //         case (ELEMENT_TET4): {
-  //           inode = sideMapTet4[this_side][k];
-  //           //std::cout << "first order" << std::endl;
-  //           break;
-  //         }
-  //         case (ELEMENT_TET10): {
-  //           inode = sideMapTet10[this_side][k];
-  //           break;
-  //         }
-  //         case (ELEMENT_HEX8): {
-  //           inode = sideMapHex8[this_side][k];
-  //           break;
-  //         }
-  //         case (ELEMENT_HEX27): {
-  //           inode = sideMapHex27[this_side][k];
-  //           break;
-  //         }
-  //       }
-  //       ss_node_id[i][j * num_face_nodes + k] =
-  //           1 + elem_blk[iblk][ielem + inode - 1];
-            
-  //     }
-  //   }
-  // }
-
-  // auto end = std::chrono::steady_clock::now();
-
-  // std::cout << "Old code time = "
-  //   << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()
-  //   << " µs" << std::endl;
-
-
-
-
   // start = std::chrono::steady_clock::now();
-  int** ss_node_id_2 = new int*[num_side_sets];
+  int** ss_node_id = new int*[num_side_sets];
   for (int i = 0; i < (int)num_side_sets; i++) {
     
-    ss_node_id_2[i] = new int[num_sides_in_ss[i] * num_face_nodes];
+    ss_node_id[i] = new int[num_sides_in_ss[i] * num_face_nodes];
     for (int j = 0; j < (int)num_sides_in_ss[i]; j++) {
       int glob_ind = elem_ss[i][j];
       int side = side_ss[i][j];
@@ -403,7 +331,7 @@ void CoupledMFEMMesh::createMFEMMesh() {
       
       for(int k = 0; k<num_face_nodes; k++)
       {
-        ss_node_id_2[i][j * num_face_nodes + k] = elem->node_id(nodes[k]);
+        ss_node_id[i][j * num_face_nodes + k] = elem->node_id(nodes[k]);
       }
       // std::cout << std::endl;
     }
@@ -456,7 +384,7 @@ void CoupledMFEMMesh::createMFEMMesh() {
   mfem_mesh = new MFEMMesh(num_elem, coordx, coordy, coordz, cubitToMFEMVertMap, uniqueVertexID,
       libmesh_element_type, libmesh_face_type, elem_blk, num_el_blk,
       num_node_per_el, num_el_in_blk, num_element_linear_nodes, num_face_nodes,
-      num_face_linear_nodes, num_side_sets, num_sides_in_ss, ss_node_id_2, ebprop,
+      num_face_linear_nodes, num_side_sets, num_sides_in_ss, ss_node_id, ebprop,
       ssprop, 3, start_of_block);
 
   delete[] elem_ss;

@@ -27,6 +27,7 @@ MFEMMesh::MFEMMesh(
   const int mfemToGenesisTri6[6] = {1, 2, 3, 4, 5, 6};
   const int mfemToGenesisQuad9[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
+
   int order = 0;
   if (libmesh_element_type == ELEMENT_TRI3 || libmesh_element_type == ELEMENT_QUAD4 ||
       libmesh_element_type == ELEMENT_TET4 || libmesh_element_type == ELEMENT_HEX8)
@@ -53,6 +54,7 @@ MFEMMesh::MFEMMesh(
     }
   }
 
+
   int elcount = 0;
   int renumberedVertID[8];
   for (int iblk = 0; iblk < (int)num_el_blk; iblk++)  // for all blocks
@@ -62,10 +64,7 @@ MFEMMesh::MFEMMesh(
       for (int j = 0; j < num_element_linear_nodes; j++) {
         renumberedVertID[j] =
             cubitToMFEMVertMap[(elem_blk[iblk][i * NumNodePerEl + j]) + 1];
-        
-        // std::cout << renumberedVertID[j] << " ";
       }
-      // std::cout << "\n";
 
       switch (libmesh_element_type) {
         case (ELEMENT_TRI3):
@@ -102,7 +101,6 @@ MFEMMesh::MFEMMesh(
       elcount++;
     }
   }
-  // std::cout << "el count = " << NumOfElements << std::endl;
   NumOfBdrElements = 0;
   for (int iss = 0; iss < (int)num_side_sets;
        iss++)  // For all the sidesets, add the number of sides to numbdrelems
@@ -132,109 +130,91 @@ MFEMMesh::MFEMMesh(
         }
         case (FACE_QUAD4):
         case (FACE_QUAD9): {
-          // std::cout << std::endl;
-          // std::cout << "Side number :" << i << std::endl;
-          // for (int vert = 0; vert < num_face_linear_nodes; vert++) {
-          //   std::cout << renumberedVertID[vert] << " ";
-          // }
           boundary[sidecount] =
               new mfem::Quadrilateral(renumberedVertID, ssprop[iss]);
           break;
         }
       }
       sidecount++;
-      // std::cout << "\n\n" << std::endl;
     }
   }
 
 
-
-
   if (order == 2)
-   {
-      // curved = 1;
-      int *mymap = NULL;
-      switch (libmesh_element_type)
+  {
+    curved = 1;
+    int *mymap = NULL;
+    switch (libmesh_element_type)
+    {
+      case (ELEMENT_TRI6):
       {
-        case (ELEMENT_TRI6):
+        mymap = (int *) mfemToGenesisTri6;
+        break;
+      }
+      case (ELEMENT_QUAD9):
+      {
+        mymap = (int *) mfemToGenesisQuad9;
+        break;
+      }
+      case (ELEMENT_TET10):
+      {
+        mymap = (int *) mfemToGenesisTet10;
+        break;
+      }
+      case (ELEMENT_HEX27):
+      {
+        mymap = (int *) mfemToGenesisHex27;
+        break;
+      }
+      case (ELEMENT_TRI3):
+      case (ELEMENT_QUAD4):
+      case (ELEMENT_TET4):
+      case (ELEMENT_HEX8):
+      {
+        MFEM_ABORT("Something went wrong. Linear elements detected when order is 2.");
+        break;
+      }
+    }
+    std::cout << "Finalising Topology" << std::endl;
+    FinalizeTopology();
+    // Define quadratic FE space
+    mfem::FiniteElementCollection *fec = new mfem::H1_FECollection(2,3);
+    mfem::FiniteElementSpace *fes = new mfem::FiniteElementSpace(this, fec, Dim,
+                                                      mfem::Ordering::byVDIM);
+    Nodes = new mfem::GridFunction(fes);
+    Nodes->MakeOwner(fec); // Nodes will destroy 'fec' and 'fes'
+    own_nodes = 1;
+    
+    for (int i = 0; i < NumOfElements; i++)
+    {
+      mfem::Array<int> dofs;
+
+      fes->GetElementDofs(i, dofs);
+      mfem::Array<int> vdofs;
+      vdofs.SetSize(dofs.Size());
+      for (int l = 0; l < dofs.Size(); l++) { vdofs[l] = dofs[l]; }
+      fes->DofsToVDofs(vdofs);
+      int iblk = 0;
+      int loc_ind;
+      while (iblk < (int) num_el_blk && i >= start_of_block[iblk+1]) { iblk++; }
+      loc_ind = i - start_of_block[iblk];
+      for (int j = 0; j < dofs.Size(); j++)
+      {
+        int point_id = elem_blk[iblk][loc_ind*num_node_per_el + mymap[j] - 1];
+        std::cout << point_id << std::endl;
+        (*Nodes)(vdofs[j]) = coordx[point_id];
+        (*Nodes)(vdofs[j]+1) = coordy[point_id];
+        if (Dim == 3)
         {
-          mymap = (int *) mfemToGenesisTri6;
-          break;
-        }
-        case (ELEMENT_QUAD9):
-        {
-          mymap = (int *) mfemToGenesisQuad9;
-          break;
-        }
-        case (ELEMENT_TET10):
-        {
-          mymap = (int *) mfemToGenesisTet10;
-          break;
-        }
-        case (ELEMENT_HEX27):
-        {
-          mymap = (int *) mfemToGenesisHex27;
-          break;
-        }
-        case (ELEMENT_TRI3):
-        case (ELEMENT_QUAD4):
-        case (ELEMENT_TET4):
-        case (ELEMENT_HEX8):
-        {
-          MFEM_ABORT("Something went wrong. Linear elements detected when order is 2.");
-          break;
+            (*Nodes)(vdofs[j]+2) = coordz[point_id];
         }
       }
-      std::cout << "Finalising Topology" << std::endl;
-      FinalizeTopology();
-      // Define quadratic FE space
-      mfem::FiniteElementCollection *fec = new mfem::H1_FECollection(2,3);
-      mfem::FiniteElementSpace *fes = new mfem::FiniteElementSpace(this, fec, Dim,
-                                                       mfem::Ordering::byVDIM);
-      Nodes = new mfem::GridFunction(fes);
-      Nodes->MakeOwner(fec); // Nodes will destroy 'fec' and 'fes'
-      own_nodes = 1;
-      std::cout << "Checkpoint 10" << std::endl;
-      // int nTotDofs = fes->GetNDofs();
-      // int nTotVDofs = fes->GetVSize();
-      //    mfem::out << endl << "nTotDofs = " << nTotDofs << "  nTotVDofs "
-      //              << nTotVDofs << endl << endl;
-      
-      for (int i = 0; i < NumOfElements; i++)
-      {
-        mfem::Array<int> dofs;
+    }
+  }
 
-        fes->GetElementDofs(i, dofs);
-        mfem::Array<int> vdofs;
-        vdofs.SetSize(dofs.Size());
-        for (int l = 0; l < dofs.Size(); l++) { vdofs[l] = dofs[l]; }
-        fes->DofsToVDofs(vdofs);
-        int iblk = 0;
-        int loc_ind;
-        while (iblk < (int) num_el_blk && i >= start_of_block[iblk+1]) { iblk++; }
-        loc_ind = i - start_of_block[iblk];
-        for (int j = 0; j < dofs.Size(); j++)
-        {
-          int point_id = elem_blk[iblk][loc_ind*num_node_per_el + mymap[j] - 1];
-          std::cout << point_id << std::endl;
-          (*Nodes)(vdofs[j]) = coordx[point_id];
-          (*Nodes)(vdofs[j]+1) = coordy[point_id];
-          if (Dim == 3)
-          {
-              (*Nodes)(vdofs[j]+2) = coordz[point_id];
-          }
-        }
-        std::cout << "\n";
-      }
-   }
-
-  std::cout << "Checkpoint 8" << std::endl;
   std::ofstream mesh_ofs("hello.vtk");
   mesh_ofs.precision(8);
   this->PrintVTK(mesh_ofs);
-  std::cout << "Checkpoint 8" << std::endl;
-
-
 }
 
 MFEMMesh::MFEMMesh(std::string afilename, int generate_edges,
