@@ -1,6 +1,8 @@
 [Mesh]
-  type = MFEMMesh
-  file = ./cylinder-hex-q2.gen
+  type = CoupledMFEMMesh
+  #file = ./cylinder-hex-q2.e
+  file = ./hypervapotron.e
+  dim = 3
 []
 
 [Problem]

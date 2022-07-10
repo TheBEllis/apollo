@@ -31,7 +31,11 @@ void CoupledMFEMMesh::buildMesh() {
   FileMesh::buildMesh();
   //Create MFEM Mesh
   std::cout << "Checkpoint 1: MOOSE mesh created" << std::endl;
+  auto start = std::chrono::steady_clock::now();
   createMFEMMesh();
+  auto end = std::chrono::steady_clock::now();
+  auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(end-start).count();
+  std::cout << "Time taken for MFEM mesh creation = " << elapsed << std::endl;
 }
 
 std::unique_ptr<MooseMesh> CoupledMFEMMesh::safeClone() const {
@@ -186,8 +190,8 @@ void CoupledMFEMMesh::getElementInfo() {
 }
 
 void CoupledMFEMMesh::createMFEMMesh() {
-  //These are all maps that enable us to get the vertices on one side of the mesh using the indexing system of [side number][node of that side]
-  //This is used from line 438 onwards
+  //These are all maps that enable us to get the vertices on 
+  //one side of the mesh using the indexing system of [side number][node of that side]
   const int sideMapTri3[3][2] = {
       {1, 2},
       {2, 3},
@@ -242,6 +246,7 @@ void CoupledMFEMMesh::createMFEMMesh() {
   const int mfemToGenesisQuad9[9] = {1, 2, 3, 4, 5, 6, 7, 8, 9};
 
   buildBndElemList();
+
   getElementInfo();
 
   num_side_sets = getNumSidesets();
@@ -261,6 +266,7 @@ void CoupledMFEMMesh::createMFEMMesh() {
 
   int* ebprop = new int[num_el_blk];
   int* ssprop = new int[num_side_sets];
+
   for (int i = 0; i < num_el_blk; i++) {
     ebprop[i] = i + 1;
   }
@@ -269,7 +275,6 @@ void CoupledMFEMMesh::createMFEMMesh() {
   }
   
   for (int block : block_ids) {
-    
     int num_el_in_block_counter = 1;
     for (libMesh::MeshBase::element_iterator el_ptr =
              getMesh().active_subdomain_elements_begin(block);
@@ -281,12 +286,10 @@ void CoupledMFEMMesh::createMFEMMesh() {
 
   // elem_blk is a 2D array that stores all the nodes of all the elements in all
   // the blocks Indexing is done as so, elem_blk[block_id][node]
-  
   int** elem_blk = new int*[num_el_blk];
   for (int i = 0; i < (int)num_el_blk; i++) {
     elem_blk[i] = new int[num_el_in_blk[i] * num_node_per_el];
   }
-
 
   // Here we are setting all the values in elem_blk
   for (int block : block_ids) {
@@ -302,51 +305,15 @@ void CoupledMFEMMesh::createMFEMMesh() {
     }
   }
   
-  // start_of_block is a 1D array with (1 + the number of blocks) elements.
-  // The first element value is always 0, the subsequent values are the starting element
-  // of each block. Forexample if block 1 consists of elements 0,1,2 the
-  // start_of_block[1] value would be
-  //  4, as this is the element that starts block 2 I am unsure what
-  //  happens when block elements are not continuous/contiguous (not
-  //  sure on the correct wording) but what I am trying to say is, what if block
-  //  1 is elements 0,3,4, and block 2 is elements 1,2???
   start_of_block[0] = 0;
   for (int i = 1; i < (int)num_el_blk + 1; i++) {
     start_of_block[i] = start_of_block[i - 1] + num_el_in_blk[i - 1];
   }
-  std::ofstream globalID("mooseGlobID");
 
-  // start = std::chrono::steady_clock::now();
   int** ss_node_id = new int*[num_side_sets];
-  for (int i = 0; i < (int)num_side_sets; i++) {
-    
-    ss_node_id[i] = new int[num_sides_in_ss[i] * num_face_nodes];
-    for (int j = 0; j < (int)num_sides_in_ss[i]; j++) {
-      int glob_ind = elem_ss[i][j];
-      int side = side_ss[i][j];
-      Elem* elem = elemPtr(glob_ind);
-      // std::cout << glob_ind << " " << side << std::endl;
-
-      std::vector<unsigned int> nodes = elem->nodes_on_side(side);
-      
-      for(int k = 0; k<num_face_nodes; k++)
-      {
-        ss_node_id[i][j * num_face_nodes + k] = elem->node_id(nodes[k]);
-      }
-      // std::cout << std::endl;
-    }
-}  
-
-
-  // end = std::chrono::steady_clock::now();
-
-  // std::cout << "New code time = "
-  //     << std::chrono::duration_cast<std::chrono::microseconds>(end - start).count()
-  //     << " µs" << std::endl;
-
+  create_ss_node_id(elem_ss, side_ss, ss_node_id);  
 
   std::vector<int> uniqueVertexID;
-
   for (int iblk = 0; iblk < (int)num_el_blk; iblk++) {
     for (int i = 0; i < (int)num_el_in_blk[iblk]; i++) {
       for (int j = 0; j < num_element_linear_nodes; j++) {
@@ -389,5 +356,22 @@ void CoupledMFEMMesh::createMFEMMesh() {
 
   delete[] elem_ss;
   delete[] side_ss;
-  delete[] ss_node_id_2;
+  delete[] ss_node_id;
+}
+
+void CoupledMFEMMesh::create_ss_node_id(int** elem_ss, int** side_ss, int** ss_node_id)
+{
+  for (int i = 0; i < (int)num_side_sets; i++) { 
+    ss_node_id[i] = new int[num_sides_in_ss[i] * num_face_nodes];
+    for (int j = 0; j < (int)num_sides_in_ss[i]; j++) {
+      int glob_ind = elem_ss[i][j];
+      int side = side_ss[i][j];
+      Elem* elem = elemPtr(glob_ind);
+      std::vector<unsigned int> nodes = elem->nodes_on_side(side);
+      for(int k = 0; k<num_face_nodes; k++)
+      {
+        ss_node_id[i][j * num_face_nodes + k] = elem->node_id(nodes[k]);
+      }
+    }
+  }  
 }

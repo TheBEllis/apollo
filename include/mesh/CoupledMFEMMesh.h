@@ -33,6 +33,8 @@ class CoupledMFEMMesh : public ExclusiveMFEMMesh {
   
   void createMFEMMesh();
 
+  void create_ss_node_id(int** elem_ss, int** side_ss, int** ss_node_id);
+
  protected:
 
   int curved = 0;

@@ -142,7 +142,6 @@ MFEMMesh::MFEMMesh(
 
   if (order == 2)
   {
-    curved = 1;
     int *mymap = NULL;
     switch (libmesh_element_type)
     {
